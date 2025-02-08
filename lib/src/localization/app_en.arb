@@ -1,0 +1,6 @@
+{
+  "appTitle": "morse",
+  "@appTitle": {
+    "description": "The title of the application"
+  }
+}
