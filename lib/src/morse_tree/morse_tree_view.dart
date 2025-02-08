@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:collection/collection.dart';
 import 'morse_painter.dart';
 import 'morse_service.dart';
+import 'morse_sequence_controller.dart';
 
 class MorseTreeView extends StatefulWidget {
   const MorseTreeView({super.key});
@@ -12,9 +14,26 @@ class MorseTreeView extends StatefulWidget {
 
 class _MorseTreeViewState extends State<MorseTreeView> {
   final MorseService _morseService = MorseService();
+  late final MorseSequenceController _sequenceController;
   List<String> _highlightPath = [];
-  String _currentLetter = '';
+  String _letters = '';
   String _currentMorse = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _sequenceController = MorseSequenceController(
+      onLetterUpdate: (letter) => setState(() => _letters = letter),
+      onMorseUpdate: (morse) => setState(() => _currentMorse = morse),
+      onPathUpdate: (path) => setState(() => _highlightPath = path),
+    );
+  }
+
+  @override
+  void dispose() {
+    _sequenceController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,23 +67,28 @@ class _MorseTreeViewState extends State<MorseTreeView> {
 
   Widget _buildStatusBar() {
     return Container(
-      height: 80,
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              '按键: $_currentLetter',
-              style: const TextStyle(color: Colors.white, fontSize: 24),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 700,
+                child: _buildLetterText(),
+              ),
+              IconButton(
+                icon: const Icon(Icons.clear, color: Colors.white),
+                onPressed: () => _sequenceController.clear(),
+              ),
+            ],
           ),
-          const SizedBox(width: 40),
+          const SizedBox(height: 8),
           SizedBox(
-            width: 200,
+            width: 800,
             child: Text(
-              '摩斯码: $_currentMorse',
+              '摩尔斯码: $_currentMorse',
               style: const TextStyle(
                 color: Colors.amber,
                 fontSize: 24,
@@ -77,36 +101,44 @@ class _MorseTreeViewState extends State<MorseTreeView> {
     );
   }
 
+  Widget _buildLetterText() {
+    final parts = _letters.split('|');
+    if (parts.length != 2) {
+      return Text(
+        '输入: ${parts[0]}',
+        style: const TextStyle(color: Colors.white, fontSize: 24),
+      );
+    }
+
+    final text = parts[0];
+    final activeIndex = int.tryParse(parts[1]) ?? -1;
+
+    return RichText(
+      text: TextSpan(
+        children: [
+          const TextSpan(
+            text: '输入: ',
+            style: TextStyle(color: Colors.white, fontSize: 24),
+          ),
+          ...text.characters.mapIndexed((index, char) => TextSpan(
+            text: char,
+            style: TextStyle(
+              color: index == activeIndex ? Colors.amber : Colors.white,
+              fontSize: 24,
+            ),
+          )).toList(),
+        ],
+      ),
+    );
+  }
+
   void _handleKeyEvent(KeyEvent event) {
     if (event is KeyDownEvent) {
       final key = event.logicalKey.keyLabel.toUpperCase();
       final path = _morseService.findPath(key);
       if (path.isNotEmpty) {
-        _startAnimation(key, path);
+        _sequenceController.addEntry(key, path);
       }
     }
-  }
-
-  void _startAnimation(String letter, List<String> path) {
-    setState(() {
-      _currentLetter = letter;
-      _currentMorse = '';
-      _highlightPath = [];
-    });
-
-    for (int i = 0; i < path.length; i++) {
-      Future.delayed(
-        Duration(milliseconds: i * MorseService.timeUnit * 2),
-        () => setState(() {
-          _highlightPath = path.sublist(0, i + 1);
-          _currentMorse += path[i] == 'dit' ? '.' : '-';
-        }),
-      );
-    }
-
-    Future.delayed(
-      Duration(milliseconds: path.length * MorseService.timeUnit * 2 + MorseService.timeUnit),
-      () => setState(() => _highlightPath = []),
-    );
   }
 } 
