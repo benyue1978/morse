@@ -3,15 +3,13 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'morse_audio_service.dart';
+import 'morse_constants.dart';
 
 class MorseSequenceController extends ChangeNotifier {
-  // 摩尔斯码时间单位常量
-  static const int timeUnit = 100;  // 基本时间单位
-  static const int _ditDuration = timeUnit;    // 点的持续时间
-  static const int _dahDuration = 3 * timeUnit;    // 划的持续时间
-  static const int _elementGap = timeUnit;     // 元素间隔
-  static const int _letterGap = 3 * timeUnit;      // 字母间隔
-  static const int _wordGap = 7 * timeUnit;      // 单词间隔
+  static const int timeUnit = MorseConstants.timeUnit;
+  static const int _elementGap = MorseConstants.gapDuration;
+  static const int _letterGap = 3 * timeUnit;
+  static const int _wordGap = 7 * timeUnit;
   
   final void Function(String letter) onLetterUpdate;
   final void Function(String morse) onMorseUpdate;
@@ -73,7 +71,6 @@ class MorseSequenceController extends ChangeNotifier {
   // 处理单个字母的摩尔斯码
   Future<void> _processMorseCode(_MorseEntry entry) async {
     if (entry.letter == ' ') {
-      // 处理空格
       _morseHistory.add('   ');
       _updateMorseHistory();
       await Future.delayed(Duration(milliseconds: _wordGap));
@@ -82,40 +79,27 @@ class MorseSequenceController extends ChangeNotifier {
 
     String partialMorse = '';
     
-    // 处理每个dit/dah
     for (int i = 0; i < entry.path.length; i++) {
       final element = entry.path[i];
-      
-      // 更新高亮路径
       onPathUpdate(entry.path.sublist(0, i + 1));
       
-      // 播放声音并等待适当的时间
       if (element == 'dit') {
         await _audioService.playDit();
-        await Future.delayed(Duration(milliseconds: _ditDuration));
       } else {
         await _audioService.playDah();
-        await Future.delayed(Duration(milliseconds: _dahDuration));
       }
 
-      // 更新显示
       partialMorse += element == 'dit' ? '.' : '-';
       _updateMorseDisplay(partialMorse);
 
       // 在元素之间添加间隔
       if (i < entry.path.length - 1) {
-        await _audioService.playGap();
         await Future.delayed(Duration(milliseconds: _elementGap));
       }
     }
 
-    // 字母间隔
     await Future.delayed(Duration(milliseconds: _letterGap));
-    
-    // 清除高亮路径
     onPathUpdate([]);
-    
-    // 更新历史记录
     _morseHistory.add(partialMorse);
     _updateMorseHistory();
   }

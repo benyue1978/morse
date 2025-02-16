@@ -15,8 +15,8 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   collection: ^1.17.0
-  audioplayers: ^5.2.1
-  just_audio: ^0.9.36
+  soundpool: ^2.4.1
+  path_provider: ^2.1.2
   
 dev_dependencies:
   flutter_test:
