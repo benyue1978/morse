@@ -1,129 +1,148 @@
 import 'dart:async';
+import 'dart:collection';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'morse_audio_service.dart';
 
-class MorseSequenceController {
-  static const int timeUnit = 50;  // 修改为 100ms
+class MorseSequenceController extends ChangeNotifier {
+  // 摩尔斯码时间单位常量
+  static const int timeUnit = 100;  // 基本时间单位
+  static const int _ditDuration = timeUnit;    // 点的持续时间
+  static const int _dahDuration = 3 * timeUnit;    // 划的持续时间
+  static const int _elementGap = timeUnit;     // 元素间隔
+  static const int _letterGap = 3 * timeUnit;      // 字母间隔
   
   final void Function(String letter) onLetterUpdate;
   final void Function(String morse) onMorseUpdate;
   final void Function(List<String> path) onPathUpdate;
 
-  Timer? _sequenceTimer;
-  final List<_MorseEntry> _sequence = [];
+  final Queue<_MorseEntry> _queue = Queue();
   final List<String> _morseHistory = [];
   String _displayText = '';
-  int _activeIndex = -1;
   bool _isProcessing = false;
-  String _currentMorse = '';  // 添加当前处理的摩尔斯码字符串
+  String _currentMorse = '';
+  
+  final MorseAudioService _audioService = MorseAudioService();
+  int _activeIndex = -1;  // 添加高亮索引
 
   MorseSequenceController({
     required this.onLetterUpdate,
     required this.onMorseUpdate,
     required this.onPathUpdate,
-  });
+  }) {
+    _audioService.init();
+  }
 
-  void addEntry(String letter, List<String> path) {
-    _sequence.add(_MorseEntry(letter, path));
+  // 添加字母到队列
+  void addLetter(String letter, List<String> path) {
+    _queue.add(_MorseEntry(letter, path));
     _displayText += letter;
     _updateLetterDisplay();
     
-    String morse = path.map((e) => e == 'dit' ? '.' : '-').join('');
-    _morseHistory.add(morse);
-    
     if (!_isProcessing) {
-      _processNextEntry();
+      _processQueue();
     }
   }
 
-  void _updateLetterDisplay() {
-    if (_activeIndex >= 0 && _activeIndex < _displayText.length) {
-      onLetterUpdate('$_displayText|$_activeIndex');
-    } else {
-      onLetterUpdate(_displayText);
-    }
-  }
-
-  void _processNextEntry() {
-    if (_sequence.isEmpty) {
+  // 处理队列
+  Future<void> _processQueue() async {
+    if (_queue.isEmpty) {
       _isProcessing = false;
-      _activeIndex = -1;
+      _activeIndex = -1;  // 重置高亮索引
       _updateLetterDisplay();
       return;
     }
 
     _isProcessing = true;
-    final entry = _sequence.removeAt(0);
-    _activeIndex = _displayText.length - _sequence.length - 1;
+    final entry = _queue.removeFirst();
+    _activeIndex = _displayText.length - _queue.length - 1;  // 更新高亮索引
     _updateLetterDisplay();
+    
+    await _processMorseCode(entry);
+    _processQueue();
+  }
 
+  // 处理单个字母的摩尔斯码
+  Future<void> _processMorseCode(_MorseEntry entry) async {
     String partialMorse = '';
-    List<String> currentPath = [];
-    int totalDelay = 0;
-
+    
     // 处理每个dit/dah
     for (int i = 0; i < entry.path.length; i++) {
       final element = entry.path[i];
       
-      _scheduleUpdate(totalDelay, () {
-        currentPath = entry.path.sublist(0, i + 1);
-        onPathUpdate(currentPath);
-      });
+      // 更新高亮路径
+      onPathUpdate(entry.path.sublist(0, i + 1));
+      
+      // 播放声音并等待适当的时间
+      if (element == 'dit') {
+        await _audioService.playDit();
+        await Future.delayed(Duration(milliseconds: _ditDuration));
+      } else {
+        await _audioService.playDah();
+        await Future.delayed(Duration(milliseconds: _dahDuration));
+      }
 
-      _scheduleUpdate(totalDelay, () {
-        partialMorse += element == 'dit' ? '.' : '-';
-        // 更新当前完整的摩尔斯码显示
-        if (_currentMorse.isNotEmpty) {
-          onMorseUpdate('$_currentMorse   $partialMorse');
-        } else {
-          onMorseUpdate(partialMorse);
-        }
-      });
+      // 更新显示
+      partialMorse += element == 'dit' ? '.' : '-';
+      _updateMorseDisplay(partialMorse);
 
-      totalDelay += element == 'dit' ? timeUnit : timeUnit * 3;
+      // 在元素之间添加间隔
       if (i < entry.path.length - 1) {
-        totalDelay += timeUnit;
+        await _audioService.playGap();
+        await Future.delayed(Duration(milliseconds: _elementGap));
       }
     }
 
-    totalDelay += timeUnit * 3;
-
-    _sequenceTimer = Timer(Duration(milliseconds: totalDelay), () {
-      onPathUpdate([]);
-      // 更新完整的摩尔斯码字符串
-      if (_currentMorse.isEmpty) {
-        _currentMorse = entry.path.map((e) => e == 'dit' ? '.' : '-').join('');
-      } else {
-        _currentMorse = '$_currentMorse   ${entry.path.map((e) => e == 'dit' ? '.' : '-').join('')}';
-      }
-      _processNextEntry();
-    });
+    // 字母间隔
+    await Future.delayed(Duration(milliseconds: _letterGap));
+    
+    // 清除高亮路径
+    onPathUpdate([]);
+    
+    // 更新历史记录
+    _morseHistory.add(partialMorse);
+    _updateMorseHistory();
   }
 
-  void dispose() {
-    _sequenceTimer?.cancel();
-    _sequence.clear();
-    _morseHistory.clear();
-    _displayText = '';
-    _activeIndex = -1;
-    _currentMorse = '';
+  void _updateLetterDisplay() {
+    if (_activeIndex >= 0 && _activeIndex < _displayText.length) {
+      onLetterUpdate('$_displayText|$_activeIndex');  // 添加高亮索引
+    } else {
+      onLetterUpdate(_displayText);
+    }
   }
 
-  void _scheduleUpdate(int delay, VoidCallback callback) {
-    Timer(Duration(milliseconds: delay), callback);
+  void _updateMorseDisplay(String morse) {
+    if (_currentMorse.isEmpty) {
+      onMorseUpdate(morse);
+    } else {
+      onMorseUpdate('$_currentMorse   $morse');
+    }
+  }
+
+  void _updateMorseHistory() {
+    _currentMorse = _morseHistory.join('   ');
+    onMorseUpdate(_currentMorse);
   }
 
   void clear() {
-    _sequenceTimer?.cancel();
-    _sequence.clear();
+    _queue.clear();
     _morseHistory.clear();
     _displayText = '';
-    _activeIndex = -1;
     _currentMorse = '';
     _isProcessing = false;
+    _activeIndex = -1;  // 重置高亮索引
     
     onLetterUpdate('');
     onMorseUpdate('');
     onPathUpdate([]);
+  }
+
+  @override
+  void dispose() {
+    _queue.clear();
+    _audioService.dispose();
+    super.dispose();
   }
 }
 

@@ -37,20 +37,23 @@ class _MorseTreeViewState extends State<MorseTreeView> {
 
   @override
   Widget build(BuildContext context) {
-    return KeyboardListener(
-      focusNode: FocusNode()..requestFocus(),
-      onKeyEvent: _handleKeyEvent,
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
+    return Focus(
+      onKeyEvent: (_, event) => KeyEventResult.handled,
+      child: KeyboardListener(
+        focusNode: FocusNode()..requestFocus(),
+        onKeyEvent: _handleKeyEvent,
+        child: Scaffold(
           backgroundColor: Colors.black,
-          title: const Text('莫尔斯电码', style: TextStyle(color: Colors.white)),
-        ),
-        body: Column(
-          children: [
-            Expanded(child: _buildMorseTree()),
-            _buildStatusBar(),
-          ],
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            title: const Text('莫尔斯电码', style: TextStyle(color: Colors.white)),
+          ),
+          body: Column(
+            children: [
+              Expanded(child: _buildMorseTree()),
+              _buildStatusBar(),
+            ],
+          ),
         ),
       ),
     );
@@ -126,7 +129,7 @@ class _MorseTreeViewState extends State<MorseTreeView> {
               color: index == activeIndex ? Colors.amber : Colors.white,
               fontSize: 24,
             ),
-          )).toList(),
+          )),
         ],
       ),
     );
@@ -137,7 +140,7 @@ class _MorseTreeViewState extends State<MorseTreeView> {
       final key = event.logicalKey.keyLabel.toUpperCase();
       final path = _morseService.findPath(key);
       if (path.isNotEmpty) {
-        _sequenceController.addEntry(key, path);
+        _sequenceController.addLetter(key, path);
       }
     }
   }
