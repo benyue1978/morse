@@ -11,6 +11,7 @@ class MorseSequenceController extends ChangeNotifier {
   static const int _dahDuration = 3 * timeUnit;    // 划的持续时间
   static const int _elementGap = timeUnit;     // 元素间隔
   static const int _letterGap = 3 * timeUnit;      // 字母间隔
+  static const int _wordGap = 7 * timeUnit;      // 单词间隔
   
   final void Function(String letter) onLetterUpdate;
   final void Function(String morse) onMorseUpdate;
@@ -35,9 +36,16 @@ class MorseSequenceController extends ChangeNotifier {
 
   // 添加字母到队列
   void addLetter(String letter, List<String> path) {
-    _queue.add(_MorseEntry(letter, path));
-    _displayText += letter;
-    _updateLetterDisplay();
+    if (letter == ' ') {
+      // 处理空格
+      _queue.add(_MorseEntry(' ', []));
+      _displayText += ' ';
+      _updateLetterDisplay();
+    } else {
+      _queue.add(_MorseEntry(letter, path));
+      _displayText += letter;
+      _updateLetterDisplay();
+    }
     
     if (!_isProcessing) {
       _processQueue();
@@ -64,6 +72,14 @@ class MorseSequenceController extends ChangeNotifier {
 
   // 处理单个字母的摩尔斯码
   Future<void> _processMorseCode(_MorseEntry entry) async {
+    if (entry.letter == ' ') {
+      // 处理空格
+      _morseHistory.add('   ');
+      _updateMorseHistory();
+      await Future.delayed(Duration(milliseconds: _wordGap));
+      return;
+    }
+
     String partialMorse = '';
     
     // 处理每个dit/dah

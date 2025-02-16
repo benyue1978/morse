@@ -137,10 +137,15 @@ class _MorseTreeViewState extends State<MorseTreeView> {
 
   void _handleKeyEvent(KeyEvent event) {
     if (event is KeyDownEvent) {
-      final key = event.logicalKey.keyLabel.toUpperCase();
-      final path = _morseService.findPath(key);
-      if (path.isNotEmpty) {
-        _sequenceController.addLetter(key, path);
+      if (event.logicalKey == LogicalKeyboardKey.space) {
+        // 处理空格键
+        _sequenceController.addLetter(' ', []);
+      } else {
+        final key = event.logicalKey.keyLabel.toUpperCase();
+        final path = _morseService.findPath(key);
+        if (path.isNotEmpty) {
+          _sequenceController.addLetter(key, path);
+        }
       }
     }
   }
